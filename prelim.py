@@ -48,16 +48,24 @@ priests are present (or not present) and vote (or not vote) for ballots proposed
 by the leader 
 they record all ballots they have participated in in individual ledger files
 """    
-class priest(god):
-
-    def __init__(self, name):
+class priest(god, messenger):
+        
+    def __init__(self, name, is_leader):
         self.name = name #write this name in the ledger in case it gets lost (ledger fileaname)
+        self.is_leader = is_leader
+        self.messenger = messenger(); #hire a messenger
+        
+        if(self.is_leader):
+            
+            
 
+    #====================regular priest functions======================
+        
     def last_vote():
         #responding to a next_ballot request from the leader        
         #determine the lastVote and send it to the leader (if not promised to another leader) (might
-        #need another function for this)
-
+        #need another function for this)        
+        
         #if responded, set promise to 1 for the relevant maxVote in the ledger
 
     def vote():
@@ -67,12 +75,8 @@ class priest(god):
 
     def on_success():
         #do something if the messenger brings the good news of a ballot success
-        
-class leader(god):
-    
-    def __init__(self, ballot_num):
-        self.ballot_num = ballot_num;
-        
+
+    #=====================leader functions===================
     def next_ballot(ballot_num):
         #randomly choose a majority set of priests
         
@@ -85,6 +89,8 @@ class leader(god):
         #check if the ballot was a success and note the decree if it was
 
         #send the sucess message to all living priests
+    
+    
     
     
     
