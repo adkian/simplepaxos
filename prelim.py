@@ -52,7 +52,8 @@ sequence of function writing (follow this when evaluating):
 - leader.evaluate
 - messenger.send_message (condensed messenger)
 TODO: 
-- multiple ballots in single instance
+- multiple god instance support
+- actually satisfy B1
 
 TODO future: 
 - split classes into different files for readability
@@ -67,7 +68,6 @@ TODO far future:
 
 """
 paxons are very religious; god controls anything and everything 
-
 
 - literally creates priests ie initializes the objects 
 """    
