@@ -21,7 +21,7 @@ priest messagebook format:
 (priests will track these for changes by messenger)
 
 from,code,voted_at_ballot=-1
-n,1/2/3,ballot_num
+n,1/2/3,ballot_number
 
 voted_at_ballot:                   responding to next_ballot from priests
 
@@ -48,6 +48,9 @@ sequence of function writing:
 
 TODO next: 
 - send_last_vote
+
+TODO future: 
+- change communications between priests to socket communications instead of file io
 ===============================
 """
 
@@ -118,8 +121,12 @@ class messenger(god):
     """
     priest messenger functions
     """
-    def send_last_vote(self,ballot_num):
-        pass
+    def send_last_vote(self,ballot_num, leader_num):
+        message = [[self.serving_priest,1,ballot_num]]
+        msg_df = pd.DataFrame(data = message)
+        with open('messages/'+str(leader_num), 'a') as f:
+            print("LOG: priest #" + self.serving_priest + " sending lastVote to leader")
+            msg_df.to_csv(f, header=False, index=False)        
 
     def send_vote():
         pass
@@ -152,7 +159,7 @@ class priest(messenger, Thread):
         #     ledgerfile.write("ballot_num,voted,promised,times_led")
         
         with open(self.messagebook, 'w') as msgbookfile:
-             msgbookfile.write("from,code\n")
+             msgbookfile.write("from,code,ballot\n")
         
         self.offset = start_offset                    
         self.is_leader = is_leader
@@ -185,7 +192,7 @@ class priest(messenger, Thread):
         
         #Send the nextBallot message to the priests and wait for their responses
         self.messenger.send_next_ballot(current_priests, ballot_num)
-        
+        #next ballot vote will begin
 
     def begin_ballot(self):
         pass
@@ -218,8 +225,8 @@ class priest(messenger, Thread):
                 break
         
         #responding to a next_ballot request from the leader
-        #TODO: check for promieses before responding
-        self.messenger.send_last_vote(last_voted)
+        #TODO: check for promises before responding
+        self.messenger.send_last_vote(last_voted, leader_num)
         #TODO: if responded, set promise to 1 for the relevant maxVote in the ledger 
         
 
