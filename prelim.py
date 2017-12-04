@@ -29,8 +29,8 @@ decree                             decree voted at
 
 codes (to leader): 
 1: last vote
-2: begin ballot
-3: successful ballot
+2: vote: yes
+3: vote: no
 
 codes (from leader):
 1: next ballot
@@ -38,23 +38,28 @@ codes (from leader):
 3: succesful ballot
 ===============================
 
-sequence of function writing:
+sequence of function writing (follow this when evaluating):
 - skeleton
 - priest init
 - leader_main
 - god init
-- next_ballot
+- leader.next_ballot
 - messenger init
-- send_next_ballot
+- leader.messenger.send_next_ballot
 - priest_main
-- send_last_vote
-- begin_ballot
-- send_begin_ballot
-TODO next: 
-
+- priest.messenger.send_last_vote
+- leader.begin_ballot
+- leader.messenger.send_begin_ballot
+- priest.vote
+- priest.messenger.send_vote
+TODO: 
+- leader.evaluate
 
 TODO future: 
 - condense all messaging functions into a single one using codes
+- split classes into different files for readability
+
+TODO far future: 
 - change communications between priests to socket communications instead of file io
 ===============================
 """
@@ -118,7 +123,7 @@ class messenger(god):
                     msg_df.to_csv(f, header=False, index=False)        
                 
     def send_begin_ballot(self, quorum, decree, ballot_num):
-        message = [[self.serving_priest,2,ballot_num,-1]]
+        message = [[self.serving_priest,2,ballot_num,decree]]
         msg_df = pd.DataFrame(data = message)
         for priest_name in quorum:
             print("LOG: leader sending beginBallot to priest #" + str(priest_name))
@@ -140,8 +145,12 @@ class messenger(god):
             print("LOG: priest #" + self.serving_priest + " sending lastVote to leader priest #" + str(leader_num))
             msg_df.to_csv(f, header=False, index=False)        
 
-    def send_vote():
-        pass
+    def send_vote(self, leader, vote, ballot_num, decree):
+        message = [[self.serving_priest,vote,ballot_num,decree]]
+        msg_df = pd.DataFrame(data = message)
+        with open('messages/'+str(leader), 'a') as f:
+            print("LOG: priest #" + self.serving_priest + " sending Vote to leader priest")
+            msg_df.to_csv(f, header=False, index=False)                
         
         
 """
@@ -216,6 +225,7 @@ class priest(messenger, Thread):
         
         self.begin_ballot(quorum, voted_decree, ballot_num)
         
+        
     def next_ballot(self,ballot_num):
         #randomly choose a number of priests: 40% - 100% of total priests
         #rand_num = random.randrange(self.num_priests*0.4, self.num_priests+1)
@@ -229,7 +239,6 @@ class priest(messenger, Thread):
 
     def begin_ballot(self, quorum, decree, ballot_num):
         self.messenger.send_begin_ballot(quorum, decree, ballot_num)
-        pass
         #send message to every priest indicating that his vote is requested
 
     def evaluate():
@@ -243,11 +252,22 @@ class priest(messenger, Thread):
     
     def priest_main(self):
         print("LOG: " + self.name + " is a priest")
-        msg = self.new_message() #recieved msg
-        msg_from = msg[0]
-        print("LOG: priest #" + self.name + " recieved msg from #" + str(msg_from))
-        self.last_vote(msg_from)
-        
+        msg = self.new_message() #block for nextBallot from leader
+        leader = msg[0] # leader 
+        print("LOG: priest #" + self.name + " recieved msg from #" + str(leader))
+        self.last_vote(leader)
+
+        while msg[1] != 2:            
+            msg = self.new_message() # block for beginBallot from leader
+            if(msg[1] == 2): # recieved beginBallot
+                #TODO probability of voting variable
+                #currently: 100% probability of voting yes
+                vote_yes = random.randrange(0,99)
+                if vote_yes < 100: #change this value to vary probability 
+                    self.vote(leader, 2, msg[2], msg[3])
+                else:
+                    vote(leader, 3, msg[2], msg[3])
+                    
     def last_vote(self,leader_num):    
         #determine the lastVote and send it to the leader (if not promised to another leader) (might
         #need another function for this)
@@ -264,12 +284,8 @@ class priest(messenger, Thread):
         #TODO: if responded, set promise to 1 for the relevant maxVote in the ledger        
         
 
-    def vote():
-        pass
-
-        #choose (randomly) whether or not to vote on this ballot
-
-        #send the vote to the leader (maybe put another function "voted")
+    def vote(self, leader, vote, ballot_num, decree):
+        self.messenger.send_vote(leader, vote, ballot_num, decree)
 
     def on_success():
         pass
