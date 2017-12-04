@@ -52,7 +52,7 @@ sequence of function writing (follow this when evaluating):
 - leader.evaluate
 - messenger.send_message (condensed messenger)
 TODO: 
-
+- multiple ballots in single instance
 
 TODO future: 
 - split classes into different files for readability
@@ -84,9 +84,9 @@ class god:
         #create and name the priests and messengers (quite godly)
         for name in range(0, self.num_priests):
             if name == random_leader:
-                self.priests[name] = priest(name, (name+1)*offset, True)
+                self.priests[name] = priest(name, (name+1)*offset, True, num_ballots)
             else:
-                self.priests[name] = priest(name, (name+1)*offset, False)
+                self.priests[name] = priest(name, (name+1)*offset, False, num_ballots)
                 
         for priest_name in self.priests.keys():
             self.priests[priest_name].start()
@@ -127,36 +127,42 @@ resulting ballot numbers: 100 200 101 300 201 102
 """    
 class priest(messenger, Thread):
         
-    def __init__(self, name, start_offset, is_leader): #is_leader: temporary var for single ballot test
+    def __init__(self, name, start_offset, is_leader, ballot_count): #is_leader: temporary var for single ballot test
         Thread.__init__(self)
-        self.name = name #write this name in the ledger in case it gets lost (ledger fileaname)
+        self.name = name 
         self.messenger = messenger(self.name) #hire a messenger
         self.ledger = "ledgers/" + self.name
         self.messagebook = "messages/" + self.name
-
-
         
         with open(self.ledger, 'w') as ledgerfile:
-            ledgerfile.write("ballot,decree\n")
-        
+            ledgerfile.write("ballot,decree\n")        
         with open(self.messagebook, 'w') as msgbookfile:
              msgbookfile.write("from,code,ballot,decree\n")
-        self.messages_recieved = 0
-        
+             
+        self.messages_recieved = 0        
         self.offset = start_offset                    
         self.is_leader = is_leader
 
+        self.ballot_count = ballot_count
+        self.ballots_done = 0
+        
     def run(self):
         if(self.is_leader):
-            self.leader_main()
+            while self.ballots_done < self.ballot_count:
+                print("LOG: *****Starting ballot #" + str(self.ballots_done+1) + " *******")
+                self.leader_main()
+                self.ballots_done += 1
         else:
-            self.priest_main()
+            while self.ballots_done < self.ballot_count:
+                self.priest_main()
+                self.ballots_done += 1
+
     #=====================leader functions===================
     def leader_main(self):
         print("LOG: " + self.name + " is the leader")
         try:
             ledger_data = pd.read_csv(self.ledger)
-            last_ballot_num= ledger_data.at[ledger_data.shape[0]-1,'ballot_num']
+            last_ballot_num= ledger_data.at[ledger_data.shape[0]-1,'ballot']
             #B1 is satisfied assuming num_ballots < difference between offsets (currently 100)
             ballot_num = self.offset + (int(last_ballot_num)%100) + 1 
         except pd.errors.EmptyDataError: #first pallot ever
@@ -209,6 +215,7 @@ class priest(messenger, Thread):
                 ledger_entry_df.to_csv(f, header=False, index=False)
         else:
             #send failed code
+            print("LOG: ballot failed")
             self.send_ballot_result(quorum, ballot_num, voted_decree, 4)
             
     def next_ballot(self, ballot, decree):
@@ -240,18 +247,18 @@ class priest(messenger, Thread):
         msg = self.new_message() #block for nextBallot from leader
         leader = msg[0] # leader 
         print("LOG: priest #" + self.name + " recieved msg from #" + str(leader))
-        self.last_vote(leader)
-
+        self.last_vote(leader)        
+        
         while msg[1] != 2:            
             msg = self.new_message() # block for beginBallot from leader
             if(msg[1] == 2): # recieved beginBallot
                 #TODO probability of voting variable
                 #currently: 100% probability of voting yes
                 vote_yes = random.randrange(0,99)
-                if vote_yes < 100: #change this value to vary probability 
+                if vote_yes < 50: #change this value to vary probability 
                     self.vote(leader, 2, msg[2], msg[3])
                 else:
-                    vote(leader, 3, msg[2], msg[3])
+                    self.vote(leader, 3, msg[2], msg[3])
 
         msg = self.new_message() #block for success (or failure) message
         if msg[0] == leader and msg[1] == 3:
