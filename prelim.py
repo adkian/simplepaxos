@@ -14,9 +14,9 @@ n,d
 ===============================
 
 priest messagebook format: 
-(priests will track these for changes by messenger)
+(priests will track these for changes by messengers)
 
-from,code,voted_at_ballot=-1,decree=-1
+from,code,ballot,decree
 
 n,1/2/3,(voted at) ballot_number, (voted for) decree
 
@@ -32,6 +32,7 @@ codes (from leader):
 1: next ballot
 2: begin ballot
 3: succesful ballot
+4: failed ballot
 ===============================
 
 sequence of function writing (follow this when evaluating):
@@ -67,7 +68,6 @@ TODO far future:
 paxons are very religious; god controls anything and everything 
 
 - literally creates priests ie initializes the objects 
-- assigns ballot number ranges for each priest (so B1 is satisfied)
 """    
 class god:
     
@@ -128,8 +128,12 @@ class messenger(god):
                 msg_df.to_csv(f, header=False, index=False)        
 
     
-    def send_on_success(self):
-        pass
+    def send_ballot_result(self, priest_name, ballot_num, decree, result):
+        message = [[self.serving_priest,result,ballot_num,decree]]
+        msg_df = pd.DataFrame(data = message)
+        print("LOG: leader sending sucesssful msg to priest #" + str(priest_name))
+        with open('messages/'+str(priest_name), 'a') as f:
+            msg_df.to_csv(f, header=False, index=False)        
         
     """
     priest messenger functions
@@ -237,17 +241,18 @@ class priest(messenger, Thread):
                 
         if votes_yes == len(quorum):
             print("LOG: ballot was successful, writing in ledger")
-            self.send_successful(quorum)            
+            self.send_ballot_result(quorum, ballot_num, voted_decree, 3)  
             #make entry in ledger
             ledger_entry = [[ballot_num, voted_decree]]
             ledger_entry_df = pd.DataFrame(data = ledger_entry)
             with open(self.ledger, 'a') as f:
                 ledger_entry_df.to_csv(f, header=False, index=False)
-        
+        else:
+            #send failed code
+            self.send_ballot_result(quorum, ballot_num, voted_decree, 4)  
     def next_ballot(self,ballot_num):
         #randomly choose a number of priests: 40% - 100% of total priests
         #rand_num = random.randrange(self.num_priests*0.4, self.num_priests+1)
-
         #current_priests = random.sample(self.priests.keys(), rand_num)        
         current_priests = self.priests.keys()
         
@@ -259,11 +264,9 @@ class priest(messenger, Thread):
         self.messenger.send_begin_ballot(quorum, decree, ballot_num)
         #send message to every priest indicating that his vote is requested
 
-    def send_successful(self,quorum):
-        pass
-        #check if the ballot was a success and note the decree if it was
-
-        #send the sucess message to all living priests
+    def send_ballot_result(self,quorum, ballot_num, decree, result):
+        for priest_name in quorum:
+            self.messenger.send_ballot_result(priest_name, ballot_num, decree, result)
 
         
     #====================regular priest functions======================
@@ -285,6 +288,16 @@ class priest(messenger, Thread):
                     self.vote(leader, 2, msg[2], msg[3])
                 else:
                     vote(leader, 3, msg[2], msg[3])
+
+        msg = self.new_message() #block for success (or failure) message
+        if msg[0] == leader and msg[1] == 3:
+            print("LOG: priest #" + self.name + " writing sucessful ballot in ledger")
+            ledger_entry = [[msg[2], msg[3]]]
+            ledger_entry_df = pd.DataFrame(data = ledger_entry)
+            with open(self.ledger, 'a') as f:
+                ledger_entry_df.to_csv(f, header=False, index=False)
+        elif msg[0] == leader and msg[1] == 4:
+            pass
                     
     def last_vote(self,leader_num):    
         #determine the lastVote and send it to the leader (if not promised to another leader) (might
@@ -305,9 +318,6 @@ class priest(messenger, Thread):
     def vote(self, leader, vote, ballot_num, decree):
         self.messenger.send_vote(leader, vote, ballot_num, decree)
 
-    def on_success():
-        pass
-        #do something if the messenger brings the good news of a ballot success
 
     #======================general functions============================
         
