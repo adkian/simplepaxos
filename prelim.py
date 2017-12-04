@@ -8,13 +8,9 @@ from threading import Thread
 ===============================
 
 priest ledger format:
-ballot number, voted or not, promised or not, times led
-n,0/1,0/1,x  
+ballot number, decree
+n,d
 
-promised or not explanation:       whether or not this priest has promised to not 
-                                   respond to maxvote requests after this ballot
-times led explanation:             number of times she's been leader
-                                   (see doc for messenger)
 ===============================
 
 priest messagebook format: 
@@ -58,6 +54,7 @@ TODO:
 TODO future: 
 - condense all messaging functions into a single one using codes
 - split classes into different files for readability
+- implement priest promise after lastvote (one idea: priest send a message to himself. this would require a new field in messagebook: 'outgoing/self')
 
 TODO far future: 
 - change communications between priests to socket communications instead of file io
@@ -176,8 +173,8 @@ class priest(messenger, Thread):
 
 
         
-        # with open(self.ledger, 'w') as ledgerfile:
-        #     ledgerfile.write("ballot_num,voted,promised,times_led")
+        with open(self.ledger, 'w') as ledgerfile:
+            ledgerfile.write("ballot,decree\n")
         
         with open(self.messagebook, 'w') as msgbookfile:
              msgbookfile.write("from,code,ballot,decree\n")
@@ -196,11 +193,15 @@ class priest(messenger, Thread):
         print("LOG: " + self.name + " is the leader")
         try:
             ledger_data = pd.read_csv(self.ledger)
-            times_led = ledger_data.at[ledger_data.shape[0]-1,'times_led'] #last col of last row of ledger
-        except pd.errors.EmptyDataError:
-            times_led = 0
+            last_ballot_num= ledger_data.at[ledger_data.shape[0]-1,'ballot_num']
+            #B1 is satisfied assuming num_ballots < difference between offsets (currently 100)
+            ballot_num = self.offset + (int(last_ballot_num)%100) + 1 
+        except pd.errors.EmptyDataError: #first pallot ever
+            ballot_num = self.offset+1
+        except ValueError: #first ballot ever
+            ballot_num = self.offset+1
             
-        ballot_num = self.offset + int(times_led) #B1 is satisfied assuming num_ballots < difference between offsets
+
         print("LOG: Leader initiating ballot #" + str(ballot_num))
         self.next_ballot(ballot_num)
 
@@ -210,7 +211,7 @@ class priest(messenger, Thread):
         quorum = []        #responded priests
         voted_ballot = 0
         voted_decree = -1
-        while responses < len(self.priests.keys())-1:
+        while responses < len(self.priests.keys())-1: 
             msg = self.new_message()
             quorum.append(int(msg[0]))
             responses += 1
@@ -224,7 +225,24 @@ class priest(messenger, Thread):
             voted_decree += 1
         
         self.begin_ballot(quorum, voted_decree, ballot_num)
-        
+
+        #block till all votes recieved
+        votes = 0
+        votes_yes = 0
+        while votes < len(quorum):
+            msg = self.new_message()
+            votes += 1
+            if msg[1] == 2:
+                votes_yes += 1
+                
+        if votes_yes == len(quorum):
+            print("LOG: ballot was successful, writing in ledger")
+            self.send_successful(quorum)            
+            #make entry in ledger
+            ledger_entry = [[ballot_num, voted_decree]]
+            ledger_entry_df = pd.DataFrame(data = ledger_entry)
+            with open(self.ledger, 'a') as f:
+                ledger_entry_df.to_csv(f, header=False, index=False)
         
     def next_ballot(self,ballot_num):
         #randomly choose a number of priests: 40% - 100% of total priests
@@ -241,7 +259,7 @@ class priest(messenger, Thread):
         self.messenger.send_begin_ballot(quorum, decree, ballot_num)
         #send message to every priest indicating that his vote is requested
 
-    def evaluate():
+    def send_successful(self,quorum):
         pass
         #check if the ballot was a success and note the decree if it was
 
