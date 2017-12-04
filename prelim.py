@@ -20,10 +20,12 @@ times led explanation:             number of times she's been leader
 priest messagebook format: 
 (priests will track these for changes by messenger)
 
-from,code,voted_at_ballot=-1
-n,1/2/3,ballot_number
+from,code,voted_at_ballot=-1,decree=-1
+
+n,1/2/3,(voted at) ballot_number, (voted for) decree
 
 voted_at_ballot:                   responding to next_ballot from priests
+decree                             decree voted at
 
 codes (to leader): 
 1: last vote
@@ -45,11 +47,14 @@ sequence of function writing:
 - messenger init
 - send_next_ballot
 - priest_main
-
-TODO next: 
 - send_last_vote
+- begin_ballot
+- send_begin_ballot
+TODO next: 
+
 
 TODO future: 
+- condense all messaging functions into a single one using codes
 - change communications between priests to socket communications instead of file io
 ===============================
 """
@@ -102,7 +107,7 @@ class messenger(god):
     leader messenger functions
     """        
     def send_next_ballot(self,current_list, ballot_num):
-        message = [[self.serving_priest,1]]
+        message = [[self.serving_priest,1,ballot_num,-1]]
         msg_df = pd.DataFrame(data = message)
         for priest_name in current_list:
             if str(priest_name) == str(self.serving_priest):
@@ -112,8 +117,14 @@ class messenger(god):
                 with open('messages/'+str(priest_name), 'a') as f:
                     msg_df.to_csv(f, header=False, index=False)        
                 
-    def send_begin_ballot(self):
-        pass
+    def send_begin_ballot(self, quorum, decree, ballot_num):
+        message = [[self.serving_priest,2,ballot_num,-1]]
+        msg_df = pd.DataFrame(data = message)
+        for priest_name in quorum:
+            print("LOG: leader sending beginBallot to priest #" + str(priest_name))
+            with open('messages/'+str(priest_name), 'a') as f:
+                msg_df.to_csv(f, header=False, index=False)        
+
     
     def send_on_success(self):
         pass
@@ -122,10 +133,11 @@ class messenger(god):
     priest messenger functions
     """
     def send_last_vote(self,ballot_num, leader_num):
-        message = [[self.serving_priest,1,ballot_num]]
+        #TODO logic for sending voted at decree in the message (-1 for now)
+        message = [[self.serving_priest,1,ballot_num,-1]]
         msg_df = pd.DataFrame(data = message)
         with open('messages/'+str(leader_num), 'a') as f:
-            print("LOG: priest #" + self.serving_priest + " sending lastVote to leader")
+            print("LOG: priest #" + self.serving_priest + " sending lastVote to leader priest #" + str(leader_num))
             msg_df.to_csv(f, header=False, index=False)        
 
     def send_vote():
@@ -153,13 +165,14 @@ class priest(messenger, Thread):
         self.ledger = "ledgers/" + self.name
         self.messagebook = "messages/" + self.name
 
-        self.messages_recieved = 0
+
         
         # with open(self.ledger, 'w') as ledgerfile:
         #     ledgerfile.write("ballot_num,voted,promised,times_led")
         
         with open(self.messagebook, 'w') as msgbookfile:
-             msgbookfile.write("from,code,ballot\n")
+             msgbookfile.write("from,code,ballot,decree\n")
+        self.messages_recieved = 0
         
         self.offset = start_offset                    
         self.is_leader = is_leader
@@ -181,7 +194,27 @@ class priest(messenger, Thread):
         ballot_num = self.offset + int(times_led) #B1 is satisfied assuming num_ballots < difference between offsets
         print("LOG: Leader initiating ballot #" + str(ballot_num))
         self.next_ballot(ballot_num)
-        self.begin_ballot()
+
+        #block till majority set sends lastvote
+        # temporary: block till all priests send responses
+        responses = 0
+        quorum = []        #responded priests
+        voted_ballot = 0
+        voted_decree = -1
+        while responses < len(self.priests.keys())-1:
+            msg = self.new_message()
+            quorum.append(int(msg[0]))
+            responses += 1
+            #note priest voted decree to satisfy b3
+            if int(msg[2]) >= 0 and int(msg[2] > voted_ballot):
+                voted_ballot = int(msg[2])
+                voted_decree = int(msg[3])
+        print("LOG: leader got all lastVotes, beginning ballot")
+
+        if voted_decree < 0:
+            voted_decree += 1
+        
+        self.begin_ballot(quorum, voted_decree, ballot_num)
         
     def next_ballot(self,ballot_num):
         #randomly choose a number of priests: 40% - 100% of total priests
@@ -192,11 +225,11 @@ class priest(messenger, Thread):
         
         #Send the nextBallot message to the priests and wait for their responses
         self.messenger.send_next_ballot(current_priests, ballot_num)
-        #next ballot vote will begin
+        #wait for priests' responses
 
-    def begin_ballot(self):
+    def begin_ballot(self, quorum, decree, ballot_num):
+        self.messenger.send_begin_ballot(quorum, decree, ballot_num)
         pass
-        #wait for all threads to respond
         #send message to every priest indicating that his vote is requested
 
     def evaluate():
@@ -210,7 +243,8 @@ class priest(messenger, Thread):
     
     def priest_main(self):
         print("LOG: " + self.name + " is a priest")
-        msg_from = self.new_message() #recieved msg from msg_from
+        msg = self.new_message() #recieved msg
+        msg_from = msg[0]
         print("LOG: priest #" + self.name + " recieved msg from #" + str(msg_from))
         self.last_vote(msg_from)
         
@@ -226,8 +260,8 @@ class priest(messenger, Thread):
         
         #responding to a next_ballot request from the leader
         #TODO: check for promises before responding
-        self.messenger.send_last_vote(last_voted, leader_num)
-        #TODO: if responded, set promise to 1 for the relevant maxVote in the ledger 
+        self.messenger.send_last_vote(last_voted, int(leader_num))
+        #TODO: if responded, set promise to 1 for the relevant maxVote in the ledger        
         
 
     def vote():
@@ -244,14 +278,17 @@ class priest(messenger, Thread):
     #======================general functions============================
         
     def new_message(self):
-        #block till new message read
+        #block till new message read, return message when read
                 
         while True:
             time.sleep(0.4)
             try:
                 msgbook_data = pd.read_csv(self.messagebook)              
                 if(msgbook_data.shape[0]>self.messages_recieved):
-                    return msgbook_data.at[msgbook_data.shape[0]-1,'from']
+                    message=msgbook_data.iloc[[self.messages_recieved]].values.tolist()[0]
+                    self.messages_recieved += 1
+                    print("LOG: leader recieved msg from priest #" + str(message[0]))
+                    return message
             
             except pd.errors.EmptyDataError:
                 pass
