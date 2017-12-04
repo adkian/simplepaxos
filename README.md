@@ -1,5 +1,5 @@
-# Simple Paxos
-### Python implementation of part-time parliament consensus system used on the Greek island of Paxos, found during extensive archeological digs by L. Lamport
+## Simple Paxos
+#### Python implementation of part-time parliament consensus system used on the Greek island of Paxos, found during extensive archeological digs by L. Lamport
 
 #### Documentation ripped from code
 
