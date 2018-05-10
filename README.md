@@ -1,16 +1,16 @@
 ## Simple Paxos
-#### Python implementation of the [Part-time Parliament](https://dl.acm.org/citation.cfm?id=279229) consensus system used on the Greek island of Paxos, found during extensive archeological digs by L. Lamport
+#### Simple thread-based Python simulation of the [Part-time Parliament](https://dl.acm.org/citation.cfm?id=279229) consensus system used on the Greek island of Paxos
 
 #### Documentation ripped from code
 
 ##### Formats
 
-###### Ledger format
+###### Ledger 
 ballot number, decree
 n,d
 
-###### Messagebook format
-(priests will track these for changes by messengers)
+###### Messagebook 
+(Priests will track these for changes by messengers)
 
 from,code,ballot,decree
 
@@ -30,9 +30,9 @@ codes (from leader):
 3: succesful ballot
 4: failed ballot
 
-##### Misc
+##### Dev log
 
-###### Sequence of function writing (follow this when evaluating):
+DONE
 
 - skeleton
 - priest init
@@ -50,26 +50,25 @@ codes (from leader):
 - leader.evaluate
 - messenger.send_message (condensed messenger)
 
-###### TODO
-- multiple god instance support
-- actually satisfy B1
+TODO
+- Actually satisfy B1
+- Multiple god instance support
 
-###### TODO future: 
-- split classes into different files for readability
-- implement priest promise after lastvote (one idea: priest send a message to himself. this would require a new field in messagebook: 'outgoing/self')
+TODO future: 
+- Implement priest promise after lastvote (one idea: priest send a message to himself. this would require a new field in messagebook: 'outgoing/self')
 
-###### TODO far future: 
-- change communications between priests to socket communications instead of file io
+TODO far future: 
+- Change messages between priests to go through sockets instead of files
 
 ##### God
-- paxons are very religious; god controls anything and everything 
-- literally creates priests ie initializes the objects 
+- Paxons are very religious; god controls anything and everything 
+- Literally creates priests i.e. initializes the objects 
 
 ##### Messenger
-- messenger relays messages to and from the leader and the priest
-she accomplishes this by tracking the priests' ledger files for changes
-- each priest (including the leader) has a personal messenger (instance)
+- Messenger relays messages to and from the leader and the priest
+- She accomplishes this by tracking the priests' ledger files for changes
+- Each priest (including the leader) has a personal messenger (instance)
 
 ##### Priest
-- priests are present (or not present) and vote (or not vote) for ballots proposed by the leader 
-- they record all ballots they have participated in in individual ledger files
+- Priests are present (or not present) and vote (or not vote) for ballots proposed by the leader 
+- They record all ballots they have participated in in individual ledger files
