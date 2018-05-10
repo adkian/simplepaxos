@@ -52,10 +52,11 @@ sequence of function writing (follow this when evaluating):
 - leader.evaluate
 - messenger.send_message (condensed messenger)
 TODO: 
-- multiple god instance support
-- actually satisfy B1
+- leader: randomize sets of priests for different ballots and wait only for a majority (and not everyone) to respond with lastVote
+- actually satisfy B1 by changing the offset method to make sure that ballot numbers for different presidents are ascending in value 
 
 TODO future: 
+- multiple god instance support
 - split classes into different files for readability
 - implement priest promise after lastvote (one idea: priest send a message to himself. this would require a new field in messagebook: 'outgoing/self')
 
@@ -132,7 +133,7 @@ class priest(messenger, Thread):
         self.name = name 
         self.messenger = messenger(self.name) #hire a messenger
         self.ledger = "ledgers/" + self.name
-        self.messagebook = "messages/" + self.name
+        self.messagebook = "messages/" + self.name        
         
         with open(self.ledger, 'w') as ledgerfile:
             ledgerfile.write("ballot,decree\n")        
@@ -145,6 +146,8 @@ class priest(messenger, Thread):
 
         self.ballot_count = ballot_count
         self.ballots_done = 0
+
+        self.decree=-1
         
     def run(self):
         if(self.is_leader):
@@ -162,18 +165,19 @@ class priest(messenger, Thread):
         print("LOG: " + self.name + " is the leader")
         try:
             ledger_data = pd.read_csv(self.ledger)
-            last_ballot_num= ledger_data.at[ledger_data.shape[0]-1,'ballot']
+            last_ballot_num = ledger_data.at[ledger_data.shape[0]-1,'ballot']
             #B1 is satisfied assuming num_ballots < difference between offsets (currently 100)
-            ballot_num = self.offset + (int(last_ballot_num)%100) + 1 
-        except pd.errors.EmptyDataError: #first pallot ever
+            ballot_num = self.offset + (int(last_ballot_num)%100) + 1
+            self.decree = ledger_data.at[ledger_data.shape[0]-1,'decree']
+        except pd.errors.EmptyDataError: #first ballot ever
             ballot_num = self.offset+1
+            self.decree += 1
         except ValueError: #first ballot ever
             ballot_num = self.offset+1
-            
-        voted_decree = -1
+            self.decree += 1
             
         print("LOG: Leader initiating ballot #" + str(ballot_num))
-        self.next_ballot(ballot_num, voted_decree)
+        self.next_ballot(ballot_num, self.decree)
 
         #block till majority set sends lastvote
         # temporary: block till all priests send responses
@@ -188,13 +192,10 @@ class priest(messenger, Thread):
             #note priest voted decree to satisfy b3
             if int(msg[2]) >= 0 and int(msg[2] > voted_ballot):
                 voted_ballot = int(msg[2])
-                voted_decree = int(msg[3])
+                self.decree = int(msg[3])
         print("LOG: leader got all lastVotes, beginning ballot")
-
-        if voted_decree < 0:
-            voted_decree += 1
         
-        self.begin_ballot(quorum, voted_decree, ballot_num)
+        self.begin_ballot(quorum, self.decree, ballot_num)
 
         #block till all votes recieved
         votes = 0
@@ -207,16 +208,17 @@ class priest(messenger, Thread):
                 
         if votes_yes == len(quorum):
             print("LOG: ballot was successful, writing in ledger")
-            self.send_ballot_result(quorum, ballot_num, voted_decree, 3)  
+            self.send_ballot_result(quorum, ballot_num, self.decree, 3)  
             #make entry in ledger
-            ledger_entry = [[ballot_num, voted_decree]]
+            ledger_entry = [[ballot_num, self.decree]]
             ledger_entry_df = pd.DataFrame(data = ledger_entry)
             with open(self.ledger, 'a') as f:
                 ledger_entry_df.to_csv(f, header=False, index=False)
+            self.decree+=1
         else:
             #send failed code
             print("LOG: ballot failed")
-            self.send_ballot_result(quorum, ballot_num, voted_decree, 4)
+            self.send_ballot_result(quorum, ballot_num, self.decree, 4)
             
     def next_ballot(self, ballot, decree):
         priests = self.priests.keys()
@@ -255,7 +257,7 @@ class priest(messenger, Thread):
                 #TODO probability of voting variable
                 #currently: 100% probability of voting yes
                 vote_yes = random.randrange(0,99)
-                if vote_yes < 50: #change this value to vary probability 
+                if vote_yes < 80: #change this value to vary probability 
                     self.vote(leader, 2, msg[2], msg[3])
                 else:
                     self.vote(leader, 3, msg[2], msg[3])
