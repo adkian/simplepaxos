@@ -1,5 +1,5 @@
 ## Simple Paxos
-#### Simple thread-based Python simulation of the [Part-time Parliament](https://dl.acm.org/citation.cfm?id=279229) consensus system used on the Greek island of Paxos
+#### Simple thread-based Python simulation of the [Part-time Parliament](https://dl.acm.org/citation.cfm?id=279229) consensus system used on the Greek island of Paxos, uncovered during archeological digs by computer scientist Leslie Lamport
 
 #### Documentation ripped from code
 
